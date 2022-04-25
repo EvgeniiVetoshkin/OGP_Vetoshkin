@@ -17,6 +17,7 @@ public class ColllectableSpawner : NetworkBehaviour
         if (IsServer)
         {
             SpawnCollectable();
+            //StartCoroutine(SpawnCollectableCorrutine());
         }
     }
 
@@ -25,9 +26,17 @@ public class ColllectableSpawner : NetworkBehaviour
         NetworkManager.Singleton.OnServerStarted += SpawnCollectable;
     }
 
-    
 
-    private void SpawnCollectable()
+    private IEnumerator SpawnCollectableCorrutine()
+    {
+        while (true)
+        { 
+            yield return new WaitForSeconds(3);
+            SpawnCollectable();
+        }
+    }
+
+    public void SpawnCollectable()
     {
 
         if (IsServer)

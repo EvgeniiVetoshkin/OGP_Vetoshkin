@@ -1,131 +1,75 @@
-using Unity.Netcode;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-[RequireComponent(typeof(NetworkObject))]
+public struct PlayerStats
+{
+    //List<GameObject> collectables;
+    //public GameObject[] collectables;
+    public float speed;
+}
+public enum PlayerState
+{ 
+    Idle,
+    Carry
+}
+
 public class PlayerMove : NetworkBehaviour
 {
-    public enum PlayerState
-    {
-        Idle,
-        IdleCarry,
-        Walk, 
-        WalkCarry
-    }
-
     [SerializeField]
-    private float walkSpeed = 3.5f;
-
+    //private float movementSpeed = 5;
+    private NetworkVariable<float> movementSpeed = new NetworkVariable<float>(NetworkVariableReadPermission.Everyone, 5f);
     [SerializeField]
-    private float rotationSpeed = 3.5f;
-
-    [SerializeField]
-    private Vector2 defaultInitialPositionOnPlane = new Vector2(-4, 4);
-
-    [SerializeField]
-    private NetworkVariable<Vector3> networkPositionDirection = new NetworkVariable<Vector3>();
-
-    [SerializeField]
-    private NetworkVariable<Vector3> networkRotationDirection = new NetworkVariable<Vector3>();
-
-    [SerializeField]
-    private NetworkVariable<PlayerState> networkPlayerState = new NetworkVariable<PlayerState>();
-
     private CharacterController characterController;
+    [SerializeField]
+    private NetworkVariable<PlayerState> playerState = new NetworkVariable<PlayerState>(PlayerState.Idle);
+    [SerializeField]
+    private NetworkVariable<PlayerStats> playerStats = new NetworkVariable<PlayerStats>();
 
-    // client caches positions
-    private Vector3 oldInputPosition = Vector3.zero;
-    private Vector3 oldInputRotation = Vector3.zero;
-    private PlayerState oldPlayerState = PlayerState.Idle;
 
-    private Animator animator;
-
-    private void Awake()
-    {
-        characterController = GetComponent<CharacterController>();
-        animator = GetComponent<Animator>();
-    }
-
-    void Start()
-    {
-        if (IsClient && IsOwner)
-        {
-            transform.position = new Vector3(Random.Range(defaultInitialPositionOnPlane.x, defaultInitialPositionOnPlane.y), 0,
-                   Random.Range(defaultInitialPositionOnPlane.x, defaultInitialPositionOnPlane.y));
-        }
-    }
-
+    //PlayerStats playerStats = new PlayerStats();
+    
     void Update()
     {
-        if (IsClient && IsOwner)
+        if (IsOwner)
         {
-            ClientInput();
+            Vector3 movementDirection = Vector3.zero;
+
+            if (Input.GetKey(KeyCode.W))
+            {
+                movementDirection.z++;
+            }
+            if (Input.GetKey(KeyCode.A))
+            {
+                movementDirection.x--;
+            }
+            if (Input.GetKey(KeyCode.S))
+            {
+                movementDirection.z--;
+            }
+            if (Input.GetKey(KeyCode.D))
+            {
+                movementDirection.x++;
+            }
+
+            movementDirection = movementDirection.normalized;
+            transform.LookAt(transform.position + movementDirection);
+
+
+            //characterController.Move(movementDirection * Time.deltaTime * movementSpeed.Value);
+            transform.localPosition += movementDirection * Time.deltaTime * movementSpeed.Value;
         }
 
-        ClientMoveAndRotate();
-        ClientVisuals();
     }
 
-    private void ClientMoveAndRotate()
+    private void OnCollisionEnter(Collision collision)
     {
-        if (networkPositionDirection.Value != Vector3.zero)
+        if (IsServer && collision.collider.CompareTag("Collectable"))
         {
-            characterController.SimpleMove(networkPositionDirection.Value);
+            //playerState.Value != PlayerState.Carry &&
+            movementSpeed.Value *= 0.6f;
+            playerState.Value = PlayerState.Carry;
         }
-        if (networkRotationDirection.Value != Vector3.zero)
-        {
-            transform.Rotate(networkRotationDirection.Value, Space.World);
-        }
-    }
-
-    private void ClientVisuals()
-    {
-        if (oldPlayerState != networkPlayerState.Value)
-        {
-            oldPlayerState = networkPlayerState.Value;
-            animator.SetTrigger($"{networkPlayerState.Value}");
-        }
-    }
-
-    private void ClientInput()
-    {
-        // left & right rotation
-        Vector3 inputRotation = new Vector3(0, Input.GetAxis("Horizontal"), 0);
-
-        // forward & backward direction
-        Vector3 direction = transform.TransformDirection(Vector3.forward);
-        float forwardInput = Input.GetAxis("Vertical");
-        Vector3 inputPosition = direction * forwardInput;
-
-        // change animation states
-        if (forwardInput == 0)
-            UpdatePlayerStateServerRpc(PlayerState.Idle);
-        else if (!ActiveRunningActionKey() && forwardInput > 0 && forwardInput <= 1)
-            UpdatePlayerStateServerRpc(PlayerState.Walk);
-
-        // let server know about position and rotation client changes
-        if (oldInputPosition != inputPosition ||
-            oldInputRotation != inputRotation)
-        {
-            oldInputPosition = inputPosition;
-            UpdateClientPositionAndRotationServerRpc(inputPosition * walkSpeed, inputRotation * rotationSpeed);
-        }
-    }
-
-    private static bool ActiveRunningActionKey()
-    {
-        return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-    }
-
-    [ServerRpc]
-    public void UpdateClientPositionAndRotationServerRpc(Vector3 newPosition, Vector3 newRotation)
-    {
-        networkPositionDirection.Value = newPosition;
-        networkRotationDirection.Value = newRotation;
-    }
-
-    [ServerRpc]
-    public void UpdatePlayerStateServerRpc(PlayerState state)
-    {
-        networkPlayerState.Value = state;
     }
 }
