@@ -4,65 +4,127 @@ using UnityEngine;
 using Unity.Netcode;
 using System;
 
-public class PlayerSpawner : MonoBehaviour
+public class PlayerSpawner : NetworkBehaviour
 {
-    [SerializeField]
-    private GameObject playerPrefab;
+
 
     [SerializeField]
-    public int numOfPlayers;
-    
-    /*
+    public int numOfPlayers = 0;
+
+
+    [SerializeField]
+    private int limitOfPlayers = 2;
+
+    [SerializeField]
+    private List<Transform> basesTransform;
+    [SerializeField]
+    private List<GameObject> playerPrefabs;
+    [SerializeField]
+    private GameObject attchPoint;
+
+    //public GameObject posUI;
+    //public GameObject inGameUI;
+    //public GameObject connectionUI;
+
+
+
     private void Setup()
     {
         NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCheck;
-        NetworkManager.Singleton.StartHost();
     }
 
     private void ApprovalCheck(byte[] connectionData, ulong clientId, NetworkManager.ConnectionApprovedDelegate callback)
     {
+        bool approve = false;
+        bool createPlayerObject = false;
 
-        //Your logic here
-        bool approve = true;
-        bool createPlayerObject = true;
+        if (clientId == NetworkManager.Singleton.LocalClientId)
+        {
+            callback(false, null, true, null, null);
+            //connectionUI.SetActive(false);
+            //posUI.SetActive(true);
+            return;
+        }
 
-        // Position to spawn the player object at, set to null to use the default position
-        Vector3? positionToSpawnAt = Vector3.zero;
+        if (limitOfPlayers > NetworkManager.Singleton.ConnectedClientsList.Count)
+        {
+            numOfPlayers++;
+            Debug.Log("ApproveClient");
+            approve = true;
 
-        // Rotation to spawn the player object at, set to null to use the default rotation
-        Quaternion rotationToSpawnWith = Quaternion.identity;
+            //connectionUI.SetActive(false);
+            //posUI.SetActive(true);
+            
 
-        //If approve is true, the connection gets added. If it's false. The client gets disconnected
-        callback(createPlayerObject, null, approve, positionToSpawnAt, rotationToSpawnWith);
+        }
+
+        callback(createPlayerObject, null, approve, Vector3.zero, Quaternion.identity);
+
+
     }
-    */
 
     private void Start()
     {
+        NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCheck;
         NetworkManager.Singleton.OnServerStarted += OnServerStarted;
     }
+
 
     private void OnServerStarted()
     {
         if (NetworkManager.Singleton.IsServer)
         {
-            if (NetworkManager.Singleton.IsHost)
-            {
-                GameObject go = Instantiate(playerPrefab);
-                NetworkObject no = go.GetComponent<NetworkObject>();
-                no.SpawnAsPlayerObject(NetworkManager.Singleton.LocalClientId);
-            }
-            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnectedCallback;
+
         }
     }
 
-    private void OnClientConnectedCallback(ulong clientID)
+    public void SpawnPlayerByClick(int spawnIndex)
     {
-        if (NetworkManager.Singleton.IsServer)
+
+        if (IsHost)
         {
-            GameObject go = Instantiate(playerPrefab);
-            NetworkObject no = go.GetComponent<NetworkObject>();
-            no.SpawnAsPlayerObject(clientID);
-        } 
+            SpawnPlayer(NetworkManager.Singleton.LocalClientId, spawnIndex);
+        }
+        else if (IsClient)
+        {
+            SpawnPlayerServerRpc(NetworkManager.Singleton.LocalClientId, spawnIndex);
+        }
+
+        //posUI.SetActive(false);
+        //inGameUI.SetActive(true);
     }
+
+
+    //[ServerRpc]
+    [ServerRpc(RequireOwnership = false)]
+    private void SpawnPlayerServerRpc(ulong clientId, int spawnPointId)
+    {
+        SpawnPlayer(clientId, spawnPointId);
+    }
+
+    private void SpawnPlayer(ulong clientId, int spawnPointId)
+    {
+        if (IsServer)
+        {
+            NetworkObject playerNO = Instantiate(playerPrefabs[spawnPointId], basesTransform[spawnPointId].position, Quaternion.identity).GetComponent<NetworkObject>();
+            playerNO.SpawnAsPlayerObject(clientId);
+
+            GameObject go = Instantiate(attchPoint);
+            NetworkObject no = go.GetComponent<NetworkObject>();
+            no.Spawn();
+            no.TrySetParent(playerNO, false);
+
+            //UpdateCamClientRpc(clientId, playerNO.transform);
+        }
+    }
+    /*
+    [ClientRpc]
+    void UpdateCamClientRpc(ulong clientId, Transform lookAt)
+    {
+        if(clientId == NetworkManager.Singleton.LocalClientId)
+        {
+            Camera.main.GetComponent<CameraTransform>().lookat = transform;
+        }
+    }
+    */
 }

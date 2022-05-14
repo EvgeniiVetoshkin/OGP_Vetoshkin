@@ -5,6 +5,10 @@ using Unity.Netcode;
 
 public class NetworkManagerButtons : MonoBehaviour
 {
+    //public GameObject connectionUI;
+    //public GameObject posUI;
+
+
     public void StartHost()
     {
         NetworkManager.Singleton.StartHost();

@@ -17,13 +17,13 @@ public class ColllectableSpawner : NetworkBehaviour
         if (IsServer)
         {
             SpawnCollectable();
-            //StartCoroutine(SpawnCollectableCorrutine());
+            StartCoroutine(SpawnCollectableCorrutine());
         }
     }
 
     private void Start()
     {
-        NetworkManager.Singleton.OnServerStarted += SpawnCollectable;
+        //NetworkManager.Singleton.OnServerStarted += SpawnCollectable;
     }
 
 
@@ -44,6 +44,7 @@ public class ColllectableSpawner : NetworkBehaviour
             GameObject go = Instantiate(spawnCollectablePrefab);
             NetworkObject no = go.GetComponent<NetworkObject>();
             no.Spawn();
+
             go.GetComponent<Rigidbody>().AddForce(Vector3.up * 5, ForceMode.Impulse);
         }
     }
